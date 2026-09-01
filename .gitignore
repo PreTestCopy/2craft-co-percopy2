@@ -91,3 +91,8 @@ __pycache__/
 .codevalid/ui/playwright.config.js
 .codevalid/ui/helper/
 .codevalid/ui/helpers/
+
+# CodeValid — auto-added
+.codevalid/test_learnings.txt
+onboarding_learning.txt
+.codevalid/onboarding_learning.txt
