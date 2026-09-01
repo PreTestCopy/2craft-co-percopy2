@@ -1,0 +1,48 @@
+# CodeValid Onboarding Learnings — craft-co-backend
+
+## 1. Database provider and ORM
+- Provider: PostgreSQL
+- ORM skill applied: prisma
+- MIGRATE_CMD chosen: `npx prisma migrate deploy`
+- Migration source path: `prisma/migrations/20240101000000_init/migration.sql` (created from scratch — no migration files existed, only `migration_lock.toml`)
+
+## 2. Prisma schema missing datasource URL
+- Failed reason: `datasource db` block had no `url` field at all
+- Root cause: Developer never added `url = env("DATABASE_URL")` to `prisma/schema.prisma`
+- Fix: Added `url = env("DATABASE_URL")` to the datasource block
+
+## 3. Prisma 7 generator output path required
+- Failed reason: Prisma 7 requires explicit `output` in the generator block
+- Root cause: Schema was written without the `output` field that Prisma 7 mandates
+- Fix: Added `output = "../node_modules/.prisma/client"` to the generator block
+
+## 4. Initial migration created from schema
+- Failed reason: `prisma/migrations/` contained only `migration_lock.toml`, no SQL migration — `prisma migrate deploy` would be a no-op
+- Root cause: Project was never migrated; only a schema and seed script existed
+- Fix: Created `prisma/migrations/20240101000000_init/migration.sql` with full DDL derived from `prisma/schema.prisma` (all enums + tables + indexes + foreign keys)
+
+## 5. No lockfile committed
+- `.gitignore` excludes `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`
+- Docker build uses `npm install --ignore-scripts` (fresh resolve) rather than `npm ci`
+
+## 6. Resend email provisioner: none
+- The Resend SDK (`resend@^6.12.4`) checks `RESEND_API_KEY` at startup; when unset it sets `resend = null` and all email calls log to console instead of hitting the network
+- No base-URL seam exists on the Resend SDK
+- `provisioner: "none"` is correct; no WireMock stub needed
+
+## 7. No OAuth / third-party auth
+- Auth is JWT-only (`jsonwebtoken`), no external IdP, no OAuth flow
+- No google-oauth or wiremock skill needed for auth
+
+## 8. Port
+- App defaults to `PORT=6713` in code; README and Vite proxy suggest `4000` but actual code value is `6713` — using `6713` as the canonical port
+
+## 9. Prisma 7 @prisma/adapter-pg API change — PrismaPg takes config object not Pool
+- Failed reason: App crashed at startup; PrismaClient could not connect to the database
+- Root cause: `@prisma/adapter-pg` v7 changed the `PrismaPg` constructor signature — v5/v6 accepted a `pg.Pool` instance; v7 takes a plain config object `{ connectionString }` directly
+- Fix: Updated `src/utils/prisma.ts` (ORM startup seam §10.2) to `new PrismaPg({ connectionString: process.env.DATABASE_URL })` and removed the `pg.Pool` instantiation
+
+## 10. *.sql in .gitignore excluded migration SQL from build context
+- Failed reason: `prisma migrate deploy` found no migration to apply (migration SQL not in build context)
+- Root cause: `.gitignore` had `*.sql` on line 38, which excluded `prisma/migrations/**/*.sql` from git tracking; while Docker uses `.dockerignore` (not `.gitignore`), the SQL file was only created on disk during a prior iteration and could be absent in a clean workspace
+- Fix: Replaced `*.sql` in `.gitignore` with a comment explaining that migration SQL must remain in the build context

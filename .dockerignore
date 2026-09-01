@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+*.log
+
+# Do NOT ignore these — they are required in the build context:
+# prisma/schema.prisma   — Prisma generate + migrate deploy need the schema
+# prisma/migrations/     — prisma migrate deploy reads migration files
+# prisma.config.ts       — Prisma 7 config file
+# tsconfig*.json         — TypeScript compilation
+# .codevalid/            — entrypoint.sh is COPY'd from here
