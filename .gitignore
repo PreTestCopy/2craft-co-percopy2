@@ -35,7 +35,8 @@ postcss.config.js
 
 # PostgreSQL
 *.psql
-*.sql
+# *.sql  — prisma/migrations/**/*.sql required for CodeValid migrate deploy + git commit
+!prisma/migrations/**/*.sql
 pgdata/
 
 # JWT auth
