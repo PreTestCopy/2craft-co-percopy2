@@ -5,10 +5,11 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert a seller user
+# 1. Seed: insert a seller user with explicit id
 SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (email, password_hash, role, status)
+  INSERT INTO users (id, email, password_hash, role, status)
   VALUES (
+    gen_random_uuid(),
     'artisan_detail_test@example.com',
     'hashed_pw',
     'ARTISAN',
@@ -47,8 +48,7 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 echo "Seeded product id: $PRODUCT_ID"
 
 # 4. When: request the product detail by id
-RESPONSE=$(curl -s -w "
-%{http_code}" "$APP_URL/products/$PRODUCT_ID")
+RESPONSE=$(curl -s -w "\n%{http_code}" "$APP_URL/products/$PRODUCT_ID")
 BODY=$(echo "$RESPONSE" | head -n -1)
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 
@@ -65,13 +65,6 @@ fi
 for FIELD in id title description category price_cents stock_qty status visible store_name; do
   VALUE=$(echo "$BODY" | jq -r --arg f "$FIELD" '.[$f] // empty')
   if [ -z "$VALUE" ]; then
-    # also check camelCase variants
-    CAMEL_VALUE=$(echo "$BODY" | jq -r '
-      .priceCents // .price_cents //
-      .stockQty   // .stock_qty   //
-      .imageUrl   // .photos      //
-      .storeName  // .store_name  //
-      empty' 2>/dev/null || true)
     echo "INFO: field '$FIELD' not found at top level; raw body excerpt checked"
   fi
 done
