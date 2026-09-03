@@ -31,7 +31,7 @@ SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
 echo "Seeded seller user id: $SELLER_ID"
 
-# 2. Seed: insert an active, visible product
+# 2. Seed: insert an active, visible product (photos as jsonb)
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   VALUES (
@@ -42,7 +42,7 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
     'CERAMICS',
     2500,
     10,
-    ARRAY['https://example.com/mug.jpg'],
+    '[\"https://example.com/mug.jpg\"]'::jsonb,
     'ACTIVE',
     true
   )
