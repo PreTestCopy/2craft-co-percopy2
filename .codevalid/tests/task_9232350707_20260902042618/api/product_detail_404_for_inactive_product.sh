@@ -1,27 +1,25 @@
 #!/usr/bin/env bash
 # Case: product_detail_404_for_inactive_product
-# GET /products/:id returns 404 with error payload when the product exists but is inactive
+# GET /products/:id returns 404 with error payload when product exists but is inactive (visible=false)
 set -euo pipefail
 
-source .codevalid/tests/task_9232350707_20260902042618/api/_infra.sh
+source tests/task_9232350707_20260902042618/api/_infra.sh
+
+CASE_ID="product_detail_404_for_inactive_product"
 
 # ---------------------------------------------------------------------------
-# Seed values
+# Seed: fixed UUIDs to avoid cross-test collisions
 # ---------------------------------------------------------------------------
-SELLER_USER_ID="a1b2c3d4-0001-0001-0001-000000000001"
-SELLER_PROFILE_ID="a1b2c3d4-0002-0002-0002-000000000002"
-INACTIVE_PRODUCT_ID="a1b2c3d4-0003-0003-0003-000000000003"
+SELLER_USER_ID="b2c3d4e5-0011-0011-0011-000000000011"
+SELLER_PROFILE_ID="b2c3d4e5-0012-0012-0012-000000000012"
+INACTIVE_PRODUCT_ID="b2c3d4e5-0013-0013-0013-000000000013"
 
-# ---------------------------------------------------------------------------
-# Seed SQL
-# ---------------------------------------------------------------------------
-
-# 1. Insert a user to act as the seller
+# 1. Insert seller user
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
 INSERT INTO users (id, email, password_hash, role, status, created_at)
 VALUES (
   '$SELLER_USER_ID',
-  'inactive-seller@example.com',
+  'inactive-prod-seller@example.com',
   'hashed_password',
   'SELLER',
   'ACTIVE',
@@ -30,7 +28,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 "
 
-# 2. Insert a seller_profile linked to that user
+# 2. Insert seller profile
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
 INSERT INTO seller_profiles (id, user_id, store_name, bio)
 VALUES (
@@ -42,19 +40,21 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 "
 
-# 3. Insert a product that is visible=false and status='DRAFT' (inactive)
+# 3. Insert product with visible=false and status='SOLD_OUT'
+#    visible=false triggers the non-admin filter (visible: true) → findFirst returns null → 404
+#    status='SOLD_OUT' is a valid ProductStatus enum value (ACTIVE | SOLD_OUT | REMOVED)
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
 INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible, created_at)
 VALUES (
   '$INACTIVE_PRODUCT_ID',
   '$SELLER_PROFILE_ID',
   'Inactive Widget',
-  'This product is not active',
-  'widgets',
-  1999,
-  10,
+  'This product is not visible to buyers',
+  'ART',
+  1500,
+  0,
   '{}',
-  'DRAFT',
+  'SOLD_OUT',
   false,
   NOW()
 )
@@ -62,7 +62,7 @@ ON CONFLICT (id) DO NOTHING;
 "
 
 # ---------------------------------------------------------------------------
-# When: GET /products/:id for the inactive product — no auth header
+# When: unauthenticated GET /products/:id for the invisible/inactive product
 # ---------------------------------------------------------------------------
 RESPONSE=$(curl -s -w "
 %{http_code}" \
@@ -76,37 +76,41 @@ echo "HTTP Status: $STATUS"
 echo "Response Body: $BODY"
 
 # ---------------------------------------------------------------------------
-# Then: assertions
+# Then: assert HTTP 404
 # ---------------------------------------------------------------------------
-
-# Assert HTTP 404
 if [ "$STATUS" -ne 404 ]; then
-  echo "FAIL: Expected HTTP 404, got $STATUS"
+  echo "FAIL [$CASE_ID]: Expected HTTP 404, got $STATUS"
+  echo "Body: $BODY"
   exit 1
 fi
 
-# Assert response body is valid JSON
-echo "$BODY" | jq . > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-  echo "FAIL: Response body is not valid JSON"
+# ---------------------------------------------------------------------------
+# Then: response body is valid JSON
+# ---------------------------------------------------------------------------
+if ! echo "$BODY" | jq . > /dev/null 2>&1; then
+  echo "FAIL [$CASE_ID]: Response body is not valid JSON: $BODY"
   exit 1
 fi
 
-# Assert error payload is present (key "error" or "message" must exist and be non-empty)
+# ---------------------------------------------------------------------------
+# Then: response body contains 'error' or 'message' field (non-empty)
+# ---------------------------------------------------------------------------
 ERROR_FIELD=$(echo "$BODY" | jq -r '.error // .message // empty')
 if [ -z "$ERROR_FIELD" ]; then
-  echo "FAIL: Expected an error payload with 'error' or 'message' key, got: $BODY"
+  echo "FAIL [$CASE_ID]: Expected error payload with 'error' or 'message' field, got: $BODY"
   exit 1
 fi
 
-# Assert product details are NOT leaked in the response
+# ---------------------------------------------------------------------------
+# Then: product data is NOT leaked in the 404 response
+# ---------------------------------------------------------------------------
 TITLE_LEAK=$(echo "$BODY" | jq -r '.title // empty')
 if [ -n "$TITLE_LEAK" ]; then
-  echo "FAIL: Product title was unexpectedly returned in 404 response"
+  echo "FAIL [$CASE_ID]: Product title was unexpectedly returned in 404 response"
   exit 1
 fi
 
-echo "PASS: GET /products/$INACTIVE_PRODUCT_ID correctly returned 404 with error payload for inactive product"
+echo "PASS [$CASE_ID]: HTTP 404 with error payload '$ERROR_FIELD' — inactive product correctly hidden"
 
 # ---------------------------------------------------------------------------
 # Teardown
