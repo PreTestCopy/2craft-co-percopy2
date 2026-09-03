@@ -5,10 +5,11 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert a seller user (use ON CONFLICT to handle re-runs)
+# 1. Seed: insert a seller user with explicit UUID id
 SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (email, password_hash, role, status)
+  INSERT INTO users (id, email, password_hash, role, status)
   VALUES (
+    gen_random_uuid(),
     'seller_detail_test_9232@example.com',
     'hashed_pw',
     'SELLER',
@@ -21,7 +22,7 @@ SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
 echo "Seeded seller user id: $SELLER_ID"
 
-# 2. Seed: insert seller_profile linked to that user (ON CONFLICT to handle re-runs)
+# 2. Seed: insert seller_profile linked to that user
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
   INSERT INTO seller_profiles (user_id, store_name, bio)
   VALUES (
@@ -32,10 +33,11 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
   ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name;
 "
 
-# 3. Seed: insert an active, visible product
+# 3. Seed: insert an active, visible product with explicit UUID id
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO products (seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
+  INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   VALUES (
+    gen_random_uuid(),
     '$SELLER_ID',
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
