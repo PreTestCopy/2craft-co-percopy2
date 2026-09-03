@@ -11,7 +11,7 @@ SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   VALUES (
     'seller_detail_test_9232@example.com',
     'hashed_pw',
-    'ARTISAN',
+    'SELLER',
     'ACTIVE'
   )
   ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
