@@ -5,30 +5,31 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert a seller user with role SELLER
+# 1. Seed: insert a seller user (use ON CONFLICT to handle re-runs)
 SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (id, email, password_hash, role, status)
+  INSERT INTO users (email, password_hash, role, status)
   VALUES (
-    gen_random_uuid(),
-    'seller_detail_test@example.com',
+    'seller_detail_test_9232@example.com',
     'hashed_pw',
-    'SELLER',
+    'ARTISAN',
     'ACTIVE'
   )
+  ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
   RETURNING id;
 ")
 
 SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
+echo "Seeded seller user id: $SELLER_ID"
 
-# 2. Seed: insert seller_profile linked to that user, providing explicit id
+# 2. Seed: insert seller_profile linked to that user (ON CONFLICT to handle re-runs)
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-  INSERT INTO seller_profiles (id, user_id, store_name, bio)
+  INSERT INTO seller_profiles (user_id, store_name, bio)
   VALUES (
-    gen_random_uuid(),
     '$SELLER_ID',
     'Detail Test Store',
-    'A test seller store'
-  );
+    'A test artisan store'
+  )
+  ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name;
 "
 
 # 3. Seed: insert an active, visible product
@@ -49,7 +50,6 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 ")
 
 PRODUCT_ID=$(echo "$PRODUCT_ID" | tr -d '[:space:]')
-
 echo "Seeded product id: $PRODUCT_ID"
 
 # 4. When: request the product detail by id (no Authorization header)
