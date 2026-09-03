@@ -18,10 +18,13 @@ SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   RETURNING id;
 ")
 
-# 2. Seed: insert seller_profile linked to that user
+SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
+
+# 2. Seed: insert seller_profile linked to that user, providing explicit id
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-  INSERT INTO seller_profiles (user_id, store_name, bio)
+  INSERT INTO seller_profiles (id, user_id, store_name, bio)
   VALUES (
+    gen_random_uuid(),
     '$SELLER_ID',
     'Detail Test Store',
     'A test seller store'
@@ -44,6 +47,8 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   )
   RETURNING id;
 ")
+
+PRODUCT_ID=$(echo "$PRODUCT_ID" | tr -d '[:space:]')
 
 echo "Seeded product id: $PRODUCT_ID"
 
