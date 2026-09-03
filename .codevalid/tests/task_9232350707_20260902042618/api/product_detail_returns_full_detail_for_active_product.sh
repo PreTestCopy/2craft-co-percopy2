@@ -22,10 +22,11 @@ SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
 echo "Seeded seller user id: $SELLER_ID"
 
-# 2. Seed: insert seller_profile linked to that user
+# 2. Seed: insert seller_profile linked to that user, with explicit UUID id
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-  INSERT INTO seller_profiles (user_id, store_name, bio)
+  INSERT INTO seller_profiles (id, user_id, store_name, bio)
   VALUES (
+    gen_random_uuid(),
     '$SELLER_ID',
     'Detail Test Store',
     'A test artisan store'
