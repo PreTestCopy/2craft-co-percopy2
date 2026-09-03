@@ -5,50 +5,56 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert seller user + seller_profile atomically in one CTE to avoid FK issues
-SELLER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  WITH new_user AS (
-    INSERT INTO users (id, email, password_hash, role, status)
-    VALUES (
-      gen_random_uuid(),
-      'seller_detail_9232350707@example.com',
-      'hashed_pw',
-      'SELLER',
-      'ACTIVE'
-    )
-    ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status
-    RETURNING id
-  ),
-  new_profile AS (
-    INSERT INTO seller_profiles (id, user_id, store_name, bio)
-    SELECT gen_random_uuid(), id, 'Detail Test Store', 'A test artisan store'
-    FROM new_user
-    ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name
+# 1. Seed: insert seller user, then seller_profile, then product
+#    products.seller_id references seller_profiles.id (not users.id)
+#    so we must insert seller_profiles first and use its id as seller_id.
+
+USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+  INSERT INTO users (id, email, password_hash, role, status)
+  VALUES (
+    gen_random_uuid(),
+    'seller_detail_9232350707@example.com',
+    'hashed_pw',
+    'SELLER',
+    'ACTIVE'
   )
-  SELECT id FROM new_user;
+  ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status
+  RETURNING id;
 ")
+USER_ID=$(echo "$USER_ID" | tr -d '[:space:]')
+echo "Seeded user id: $USER_ID"
 
-SELLER_ID=$(echo "$SELLER_ID" | tr -d '[:space:]')
-echo "Seeded seller user id: $SELLER_ID"
+PROFILE_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+  INSERT INTO seller_profiles (id, user_id, store_name, bio)
+  VALUES (
+    gen_random_uuid(),
+    '$USER_ID',
+    'Detail Test Store',
+    'A test artisan store'
+  )
+  ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name
+  RETURNING id;
+")
+PROFILE_ID=$(echo "$PROFILE_ID" | tr -d '[:space:]')
+echo "Seeded seller_profile id: $PROFILE_ID"
 
-# 2. Seed: insert an active, visible product (photos as jsonb)
+# 2. Seed: insert an active, visible product using seller_profiles.id as seller_id
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   VALUES (
     gen_random_uuid(),
-    '$SELLER_ID',
+    '$PROFILE_ID',
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
     'CERAMICS',
     2500,
     10,
-    '[\"https://example.com/mug.jpg\"]'::jsonb,
+    ARRAY['https://example.com/mug.jpg'],
     'ACTIVE',
     true
   )
   RETURNING id;
 ")
-
 PRODUCT_ID=$(echo "$PRODUCT_ID" | tr -d '[:space:]')
 echo "Seeded product id: $PRODUCT_ID"
 
