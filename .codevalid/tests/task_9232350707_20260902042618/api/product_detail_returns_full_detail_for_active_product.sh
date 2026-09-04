@@ -5,15 +5,16 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# Helper: extract a clean UUID from psql output (strips "INSERT 0 1" and whitespace)
+# Helper: extract a clean UUID from psql output (strips command tags and whitespace)
 extract_uuid() {
   echo "$1" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n 1
 }
 
-# 1. Seed: insert seller user
+# 1. Seed: insert seller user with explicit gen_random_uuid() for id
 RAW_USER=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (email, password_hash, role, status)
+  INSERT INTO users (id, email, password_hash, role, status)
   VALUES (
+    gen_random_uuid(),
     'seller_detail_9232350707@example.com',
     'hashed_pw',
     'SELLER',
@@ -25,10 +26,16 @@ RAW_USER=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 USER_ID=$(extract_uuid "$RAW_USER")
 echo "Seeded user id: $USER_ID"
 
-# 2. Seed: insert seller_profile
+if [ -z "$USER_ID" ]; then
+  echo "FAIL: could not extract user UUID from psql output: $RAW_USER"
+  exit 1
+fi
+
+# 2. Seed: insert seller_profile with explicit gen_random_uuid() for id
 RAW_PROFILE=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO seller_profiles (user_id, store_name, bio)
+  INSERT INTO seller_profiles (id, user_id, store_name, bio)
   VALUES (
+    gen_random_uuid(),
     '$USER_ID',
     'Detail Test Store',
     'A test artisan store'
@@ -39,17 +46,25 @@ RAW_PROFILE=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 PROFILE_ID=$(extract_uuid "$RAW_PROFILE")
 echo "Seeded seller_profile id: $PROFILE_ID"
 
+if [ -z "$PROFILE_ID" ]; then
+  echo "FAIL: could not extract seller_profile UUID from psql output: $RAW_PROFILE"
+  exit 1
+fi
+
 # 3. Seed: insert an active, visible product
+#    - seller_id references seller_profiles.id
+#    - photos is jsonb, so cast to jsonb
 RAW_PRODUCT=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO products (seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
+  INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   VALUES (
+    gen_random_uuid(),
     '$PROFILE_ID',
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
     'CERAMICS',
     2500,
     10,
-    ARRAY['https://example.com/mug.jpg'],
+    '[\"https://example.com/mug.jpg\"]'::jsonb,
     'ACTIVE',
     true
   )
