@@ -5,10 +5,11 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert seller user
+# 1. Seed: insert seller user with explicit UUID
 USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (email, password_hash, role, status)
+  INSERT INTO users (id, email, password_hash, role, status)
   VALUES (
+    gen_random_uuid(),
     'seller_detail_9232350707@example.com',
     'hashed_pw',
     'SELLER',
@@ -21,10 +22,10 @@ USER_ID=$(echo "$USER_ID" | tr -d '[:space:]')
 echo "Seeded user id: $USER_ID"
 
 # 2. Seed: insert seller_profile linked to that user
-#    products.seller_id references seller_profiles.id
 PROFILE_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO seller_profiles (user_id, store_name, bio)
+  INSERT INTO seller_profiles (id, user_id, store_name, bio)
   VALUES (
+    gen_random_uuid(),
     '$USER_ID',
     'Detail Test Store',
     'A test artisan store'
@@ -37,8 +38,9 @@ echo "Seeded seller_profile id: $PROFILE_ID"
 
 # 3. Seed: insert an active, visible product using seller_profiles.id as seller_id
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO products (seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
+  INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   VALUES (
+    gen_random_uuid(),
     '$PROFILE_ID',
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
