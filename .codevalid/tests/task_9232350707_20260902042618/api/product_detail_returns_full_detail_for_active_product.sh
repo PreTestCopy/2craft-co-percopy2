@@ -5,7 +5,7 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert seller user with explicit UUID
+# 1. Seed: insert seller user and capture clean UUID
 USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO users (id, email, password_hash, role, status)
   VALUES (
@@ -17,31 +17,30 @@ USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   )
   ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status
   RETURNING id;
-")
-USER_ID=$(echo "$USER_ID" | tr -d '[:space:]')
+" | tr -d '[:space:]')
 echo "Seeded user id: $USER_ID"
 
-# 2. Seed: insert seller_profile linked to that user
+# 2. Seed: insert seller_profile using a subquery to avoid shell variable contamination
 PROFILE_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO seller_profiles (id, user_id, store_name, bio)
-  VALUES (
+  SELECT
     gen_random_uuid(),
-    '$USER_ID',
+    id,
     'Detail Test Store',
     'A test artisan store'
-  )
+  FROM users
+  WHERE email = 'seller_detail_9232350707@example.com'
   ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name
   RETURNING id;
-")
-PROFILE_ID=$(echo "$PROFILE_ID" | tr -d '[:space:]')
+" | tr -d '[:space:]')
 echo "Seeded seller_profile id: $PROFILE_ID"
 
 # 3. Seed: insert an active, visible product using seller_profiles.id as seller_id
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
-  VALUES (
+  SELECT
     gen_random_uuid(),
-    '$PROFILE_ID',
+    sp.id,
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
     'CERAMICS',
@@ -50,10 +49,11 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
     ARRAY['https://example.com/mug.jpg'],
     'ACTIVE',
     true
-  )
+  FROM seller_profiles sp
+  JOIN users u ON sp.user_id = u.id
+  WHERE u.email = 'seller_detail_9232350707@example.com'
   RETURNING id;
-")
-PRODUCT_ID=$(echo "$PRODUCT_ID" | tr -d '[:space:]')
+" | tr -d '[:space:]')
 echo "Seeded product id: $PRODUCT_ID"
 
 # 4. When: request the product detail by id (no Authorization header)
