@@ -36,6 +36,7 @@ PROFILE_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
 echo "Seeded seller_profile id: $PROFILE_ID"
 
 # 3. Seed: insert an active, visible product using seller_profiles.id as seller_id
+# photos column is jsonb — cast the array literal to jsonb explicitly
 PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
   SELECT
@@ -46,7 +47,7 @@ PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
     'CERAMICS',
     2500,
     10,
-    ARRAY['https://example.com/mug.jpg'],
+    '[\"https://example.com/mug.jpg\"]'::jsonb,
     'ACTIVE',
     true
   FROM seller_profiles sp
