@@ -5,11 +5,15 @@ source tests/task_9232350707_20260902042618/api/_infra.sh
 
 # ── Case: product_detail_returns_full_detail_for_active_product ──
 
-# 1. Seed: insert seller user and capture clean UUID
-USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO users (id, email, password_hash, role, status)
+# Helper: extract a clean UUID from psql output (strips "INSERT 0 1" and whitespace)
+extract_uuid() {
+  echo "$1" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n 1
+}
+
+# 1. Seed: insert seller user
+RAW_USER=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+  INSERT INTO users (email, password_hash, role, status)
   VALUES (
-    gen_random_uuid(),
     'seller_detail_9232350707@example.com',
     'hashed_pw',
     'SELLER',
@@ -17,45 +21,47 @@ USER_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
   )
   ON CONFLICT (email) DO UPDATE SET status = EXCLUDED.status
   RETURNING id;
-" | tr -d '[:space:]')
+")
+USER_ID=$(extract_uuid "$RAW_USER")
 echo "Seeded user id: $USER_ID"
 
-# 2. Seed: insert seller_profile using a subquery to avoid shell variable contamination
-PROFILE_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO seller_profiles (id, user_id, store_name, bio)
-  SELECT
-    gen_random_uuid(),
-    id,
+# 2. Seed: insert seller_profile
+RAW_PROFILE=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+  INSERT INTO seller_profiles (user_id, store_name, bio)
+  VALUES (
+    '$USER_ID',
     'Detail Test Store',
     'A test artisan store'
-  FROM users
-  WHERE email = 'seller_detail_9232350707@example.com'
+  )
   ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name
   RETURNING id;
-" | tr -d '[:space:]')
+")
+PROFILE_ID=$(extract_uuid "$RAW_PROFILE")
 echo "Seeded seller_profile id: $PROFILE_ID"
 
-# 3. Seed: insert an active, visible product using seller_profiles.id as seller_id
-# photos column is jsonb — cast the array literal to jsonb explicitly
-PRODUCT_ID=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
-  INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
-  SELECT
-    gen_random_uuid(),
-    sp.id,
+# 3. Seed: insert an active, visible product
+RAW_PRODUCT=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+  INSERT INTO products (seller_id, title, description, category, price_cents, stock_qty, photos, status, visible)
+  VALUES (
+    '$PROFILE_ID',
     'Handcrafted Mug',
     'A beautiful hand-thrown ceramic mug.',
     'CERAMICS',
     2500,
     10,
-    '[\"https://example.com/mug.jpg\"]'::jsonb,
+    ARRAY['https://example.com/mug.jpg'],
     'ACTIVE',
     true
-  FROM seller_profiles sp
-  JOIN users u ON sp.user_id = u.id
-  WHERE u.email = 'seller_detail_9232350707@example.com'
+  )
   RETURNING id;
-" | tr -d '[:space:]')
+")
+PRODUCT_ID=$(extract_uuid "$RAW_PRODUCT")
 echo "Seeded product id: $PRODUCT_ID"
+
+if [ -z "$PRODUCT_ID" ]; then
+  echo "FAIL: could not extract product UUID from psql output: $RAW_PRODUCT"
+  exit 1
+fi
 
 # 4. When: request the product detail by id (no Authorization header)
 RESPONSE=$(curl -s -w "\n%{http_code}" "$APP_URL/products/$PRODUCT_ID")
