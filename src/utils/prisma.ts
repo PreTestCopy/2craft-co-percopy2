@@ -16,7 +16,7 @@ export function calcFees(totalCents: number) {
 }
 
 export function deriveProductStatus(stockQty: number, status: string): string {
-  if (status === "REMOVED") return "removed";
-  if (stockQty <= 0) return "sold_out";
-  return "active";
+  if (status === "REMOVED") return "REMOVED";
+  if (stockQty <= 0) return "SOLD_OUT";
+  return "ACTIVE";
 }
