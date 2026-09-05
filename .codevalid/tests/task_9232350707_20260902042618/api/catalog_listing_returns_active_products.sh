@@ -3,7 +3,7 @@
 # Verify GET /products returns HTTP 200 with active products array including required fields.
 set -euo pipefail
 
-source "$(dirname "$0")/_infra.sh"
+source tests/task_9232350707_20260902042618/api/_infra.sh
 
 echo "=== Case: catalog_listing_returns_active_products ==="
 
@@ -45,7 +45,6 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
 echo "[Step 3] Done."
 
 # ---- Step 4: Seed active product ----
-# Note: products.seller_id references seller_profiles.id, not users.id
 echo "[Step 4] Seeding active product..."
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
   INSERT INTO products (id, seller_id, title, description, category, price_cents, stock_qty, photos, status, visible, created_at)
