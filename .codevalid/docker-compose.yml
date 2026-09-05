@@ -58,6 +58,8 @@ services:
         CACHEBUST: "${CODEVALID_CACHEBUST:-1}"
     environment:
       DATABASE_URL: "postgresql://app:app@toxiproxy:5432/appdb"
+      APP_BASE_URL: "http://app:6713"
+      BASE_URL: "http://app:6713"
     depends_on:
       app:
         condition: service_healthy
